@@ -25,6 +25,12 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
+    // `leetui grind` runs the offline typing trainer — no leetcode session,
+    // config, or database needed.
+    if std::env::args().nth(1).as_deref() == Some("grind") {
+        return leetcode_tui_rs::grind::run();
+    }
+
     let config: Config;
 
     if let Some(c) = get_config().await? {

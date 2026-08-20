@@ -43,6 +43,25 @@ leetui
 - Solved questions are marked with ✔️
 - Neetcode 75
 - For Fuzzy search questions in the question list use `/`
+- Grind mode: offline typing trainer with a live WPM candlestick chart (`leetui grind`)
+
+## Grind mode
+
+`leetui grind` launches a typing trainer that needs no leetcode session,
+config, or database. Pick a classic problem, type out its solution, and watch
+your words-per-minute chart like a stock ticker — every 2 seconds of typing
+closes an OHLC candle: green when your pace is climbing, red when it drops.
+Finish the run to get your average WPM, keystroke accuracy, session high, and
+a bullish/bearish verdict on the session.
+
+```sh
+leetui grind
+```
+
+Keys: `↑/↓`/`j/k` pick a problem, `Enter` start, `Esc` back to menu,
+`Ctrl+r` restart the run, `Enter` (on results) next problem, `Ctrl+c` quit.
+Wrong keys don't advance the cursor — they flash red and count against
+accuracy. Indentation after a newline is skipped automatically.
 
 Few related projects:
 
