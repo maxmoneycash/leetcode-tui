@@ -40,6 +40,12 @@ pub struct GrindApp {
     last_error_at: Option<Instant>,
 }
 
+impl Default for GrindApp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GrindApp {
     pub fn new() -> Self {
         Self {
