@@ -41,6 +41,7 @@ impl TopicTagListWidget {
                     CommonHelpText::ScrollUp.into(),
                     CommonHelpText::ScrollDown.into(),
                     CommonHelpText::SwitchPane.into(),
+                    CommonHelpText::Grind.into(),
                 ],
             ),
             topics: Default::default(),

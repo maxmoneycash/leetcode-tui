@@ -167,6 +167,7 @@ impl QuestionListWidget {
                     CommonHelpText::Run.into(),
                     CommonHelpText::Submit.into(),
                     CommonHelpText::Search.into(),
+                    CommonHelpText::Grind.into(),
                 ],
             ),
             topic_tag_question_map: HashMap::new(),

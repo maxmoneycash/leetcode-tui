@@ -43,16 +43,19 @@ leetui
 - Solved questions are marked with ✔️
 - Neetcode 75
 - For Fuzzy search questions in the question list use `/`
-- Grind mode: offline typing trainer with a live WPM candlestick chart (`leetui grind`)
+- Grind mode: typing trainer with a live WPM candlestick chart (press `g`, or `leetui grind`)
 
 ## Grind mode
 
-`leetui grind` launches a typing trainer that needs no leetcode session,
-config, or database. Pick a classic problem, type out its solution, and watch
-your words-per-minute chart like a stock ticker — every 2 seconds of typing
-closes an OHLC candle: green when your pace is climbing, red when it drops.
+Grind mode is a typing trainer built into the TUI. Pick a classic problem,
+type out its solution, and watch your words-per-minute chart like a stock
+ticker — every 2 seconds of typing closes an OHLC candle: green when your
+pace is climbing, red when it drops.
 Finish the run to get your average WPM, keystroke accuracy, session high, and
 a bullish/bearish verdict on the session.
+
+Press `g` from the topic or question list to open it inside the running TUI,
+or launch it standalone — no leetcode session, config, or database needed:
 
 ```sh
 leetui grind

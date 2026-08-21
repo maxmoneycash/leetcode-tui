@@ -12,6 +12,12 @@ use super::{
 
 /// Renders the user interface widgets.
 pub fn render(app: &mut App, f: &mut CrosstermStderr) {
+    // grind mode takes over the full frame while it is open
+    if let Some(grind) = app.grind.as_mut() {
+        crate::grind::ui::render(grind, f);
+        return;
+    }
+
     // Create two chunks with equal horizontal screen space
     let size = f.size();
 

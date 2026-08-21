@@ -104,6 +104,7 @@ pub(crate) enum CommonHelpText {
     Close,
     Select,
     Search,
+    Grind,
 }
 
 impl From<CommonHelpText> for HelpText {
@@ -119,6 +120,7 @@ impl From<CommonHelpText> for HelpText {
             CommonHelpText::Submit => (vec![KeyCode::Char('s')], "Submit"),
             CommonHelpText::Run => (vec![KeyCode::Char('R'), KeyCode::Char('r')], "Run"),
             CommonHelpText::Search => (vec![KeyCode::Char('/')], "Search"),
+            CommonHelpText::Grind => (vec![KeyCode::Char('g')], "Grind"),
         };
         HelpText {
             button: k,

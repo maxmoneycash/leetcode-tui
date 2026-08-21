@@ -15,6 +15,7 @@ use super::widgets::topic_list::TopicTagListWidget;
 use super::widgets::Widget;
 use crate::config::Config;
 use crate::errors::AppResult;
+use crate::grind::app::GrindApp;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use indexmap::IndexMap;
 
@@ -39,6 +40,10 @@ pub struct App {
     pub vim_running: Arc<AtomicBool>,
 
     pub config: Rc<Config>,
+
+    /// When set, grind mode owns the screen and all key events. Driven from
+    /// this loop rather than its own so the two never contend for stdin.
+    pub grind: Option<GrindApp>,
 }
 
 impl App {
@@ -85,6 +90,7 @@ impl App {
             popup_stack: vec![],
             vim_running,
             vim_tx,
+            grind: None,
         };
         app.setup()?;
         Ok(app)
@@ -161,6 +167,10 @@ impl App {
             self.process_task(task)?;
         }
 
+        if let Some(grind) = self.grind.as_mut() {
+            grind.tick();
+        }
+
         if let Some(popup) = self.get_current_popup_mut() {
             if !popup.is_active() {
                 self.popup_stack.pop();
@@ -220,6 +230,19 @@ impl App {
     pub fn handle_key_events(&mut self, key_event: KeyEvent) -> AppResult<()> {
         let mut p_notif = None;
 
+        // grind mode owns the whole screen while it is open
+        if let Some(grind) = self.grind.as_mut() {
+            grind.handle_key(key_event);
+            // sample the ticker on every keystroke: the host tick rate is far
+            // too coarse to shape candles while someone is typing
+            grind.tick();
+            if !grind.running {
+                self.grind = None;
+            }
+            self.tick(None)?;
+            return Ok(());
+        }
+
         // if ui has active popups then send only events registered with popup
         if let Some(popup) = self.get_current_popup_mut() {
             p_notif = popup.handler(key_event)?;
@@ -229,6 +252,9 @@ impl App {
                 KeyCode::Right => p_notif = self.prev_widget()?,
                 KeyCode::Char('q') | KeyCode::Char('Q') => {
                     self.running = false;
+                }
+                KeyCode::Char('g') => {
+                    self.grind = Some(GrindApp::new());
                 }
                 KeyCode::Char('c') | KeyCode::Char('C') => {
                     if key_event.modifiers == KeyModifiers::CONTROL {

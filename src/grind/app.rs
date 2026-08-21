@@ -29,6 +29,7 @@ pub enum Screen {
     Results,
 }
 
+#[derive(Debug)]
 pub struct GrindApp {
     pub screen: Screen,
     pub selected: usize,
@@ -78,7 +79,11 @@ impl GrindApp {
         self.screen = Screen::Typing;
     }
 
-    fn tick(&mut self) {
+    /// Advance error-flash timing and sample the wpm ticker.
+    ///
+    /// Public so the main TUI can drive grind mode from its own event loop
+    /// instead of grind owning stdin.
+    pub fn tick(&mut self) {
         if let Some(t) = self.last_error_at {
             if t.elapsed() >= ERROR_FLASH {
                 self.flash_error = false;
@@ -108,7 +113,9 @@ impl GrindApp {
         }
     }
 
-    fn handle_key(&mut self, key: event::KeyEvent) {
+    /// Feed one key event. Sets `running = false` when the user leaves the
+    /// problem picker, which the host uses as the signal to close the overlay.
+    pub fn handle_key(&mut self, key: event::KeyEvent) {
         if key.kind == KeyEventKind::Release {
             return;
         }
