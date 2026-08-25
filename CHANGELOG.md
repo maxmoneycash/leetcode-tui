@@ -11,6 +11,15 @@ All notable changes to this project will be documented in this file.
   list, or run `leetui grind` standalone (needs no leetcode session,
   config, or database).
 
+### Changed
+
+- Declared `rust-version = "1.70"`, matching the toolchain CI already builds
+  against, and added contributor docs (`CONTRIBUTING.md`,
+  `CODE_OF_CONDUCT.md`, issue and pull request templates).
+
+- CI now runs on the `main` branch; it previously only triggered on `dev` and
+  `master`, so nothing was gated. Its install step now uses `--locked`.
+
 ### Fixed
 
 - Bumped `time` 0.3.23 -> 0.3.36 in `Cargo.lock`; 0.3.23 fails to compile on

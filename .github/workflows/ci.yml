@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["dev", "master"]
+    branches: ["main", "dev", "master"]
   pull_request:
-    branches: [master]
+    branches: ["main", "master"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -60,7 +60,9 @@ jobs:
         run: cargo build --release
 
       - name: Test Install
-        run: cargo install --path "." --force
+        # --locked: without it cargo re-resolves from scratch and currently
+        # picks a sea-orm-cli/regex pair that does not compile.
+        run: cargo install --path "." --force --locked
 
       - name: Binary Size (unix)
         if: matrix.os != 'windows-latest'

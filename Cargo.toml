@@ -2,6 +2,7 @@
 name = "leetcode-tui-rs"
 version = "0.3.0"
 edition = "2021"
+rust-version = "1.70"
 authors = ["Akarsh <akarsh.1995.02@gmail.com>"]
 description = "Leetcode terminal UI. Helps you browse leetcode stats and manage your leetcode from terminal."
 readme = "README.md"

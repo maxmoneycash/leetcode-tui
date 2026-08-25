@@ -2,17 +2,44 @@
 
 # Use Leetcode in your terminal.
 
+> **This is a fork** of [akarsh1995/leetcode-tui](https://github.com/akarsh1995/leetcode-tui)
+> by [Akarsh Jain](https://github.com/akarsh1995), who wrote the original TUI.
+> It tracks upstream and adds **grind mode** (see below). All credit for the
+> project itself belongs upstream; see [Credits](#credits).
+
 ![Demo](https://vhs.charm.sh/vhs-6HARsZDGe7mSVwTepHFUJv.gif)
 
 ### Why this TUI:
 
-My motivation for creating leetcode-tui stemmed from my preference for tools that are lightweight and consume fewer system resources. When I explored existing leetcode CLI tools on GitHub, I came across a few raw command-line interfaces, but they lacked the interactivity I desired.
-To address this, I decided to develop leetcode-tui, a Text-based User Interface, that provides an interactive and user-friendly experience for solving LeetCode problems.
+_From the original author, Akarsh Jain:_
+
+> My motivation for creating leetcode-tui stemmed from my preference for tools that are lightweight and consume fewer system resources. When I explored existing leetcode CLI tools on GitHub, I came across a few raw command-line interfaces, but they lacked the interactivity I desired.
+> To address this, I decided to develop leetcode-tui, a Text-based User Interface, that provides an interactive and user-friendly experience for solving LeetCode problems.
 
 > **Warning**
 > This TUI is currently under active development. Please feel free to open an issue if you find errors.
 
 ## Installation
+
+Install **this fork** (the published `leetcode-tui-rs` crate is upstream's and
+does not include grind mode):
+
+```sh
+cargo install --git https://github.com/maxmoneycash/leetcode-tui --locked
+```
+
+Or build from a checkout:
+
+```sh
+git clone https://github.com/maxmoneycash/leetcode-tui
+cd leetcode-tui
+cargo install --path "." --force --locked
+```
+
+`--locked` is required: without it cargo re-resolves the dependency graph and
+currently picks a `sea-orm-cli` / `regex` pair that does not compile.
+
+To install the original upstream TUI instead:
 
 ```sh
 cargo install leetcode-tui-rs
@@ -70,3 +97,22 @@ Few related projects:
 
 - [https://github.com/skygragon/leetcode-cli](https://github.com/skygragon/leetcode-cli)
 - [https://github.com/clearloop/leetcode-cli](https://github.com/clearloop/leetcode-cli)
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for build,
+test and lint instructions — note the project's **minimum supported Rust
+version is 1.70**, which CI enforces. By participating you agree to abide by
+the [Code of Conduct](./CODE_OF_CONDUCT.md).
+
+## Credits
+
+The original Leetcode TUI was created by
+[Akarsh Jain](https://github.com/akarsh1995) at
+[akarsh1995/leetcode-tui](https://github.com/akarsh1995/leetcode-tui). This
+fork builds on that work and adds grind mode.
+
+## License
+
+MIT — see [LICENSE](./LICENSE). Copyright (c) 2023 Akarsh Jain; the original
+copyright is retained, as the MIT license requires.
