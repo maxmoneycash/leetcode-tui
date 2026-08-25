@@ -49,7 +49,10 @@ impl Widget for CandleChart<'_> {
         let height = inner.height;
 
         // Fit the most recent candles into the width, one candle every 2 cols.
-        let max_candles = (chart_width as usize).div_ceil(2);
+        // Written out rather than usize::div_ceil: that is stable only from
+        // Rust 1.73 and CI still builds this crate on 1.70.
+        #[allow(clippy::manual_div_ceil)]
+        let max_candles = (chart_width as usize + 1) / 2;
         let start = self.candles.len().saturating_sub(max_candles);
         let visible = &self.candles[start..];
 

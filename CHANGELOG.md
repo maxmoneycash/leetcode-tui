@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Grind mode: a typing trainer for classic problems with a live
+  words-per-minute candlestick chart. Press `g` from the topic or question
+  list, or run `leetui grind` standalone (needs no leetcode session,
+  config, or database).
+
+### Fixed
+
+- Bumped `time` 0.3.23 -> 0.3.36 in `Cargo.lock`; 0.3.23 fails to compile on
+  current rustc due to a type-inference regression.
+
 - Sort questions by:
     - likes dislikes ratio.
 
