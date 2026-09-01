@@ -36,7 +36,7 @@ use indexmap::{IndexMap, IndexSet};
 use ratatui::widgets::Paragraph;
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, List, ListItem},
+    widgets::{Block, BorderType, Borders, List, ListItem},
 };
 
 use self::custom_lists::NEETCODE_75;
@@ -626,7 +626,9 @@ impl Widget for QuestionListWidget {
             .map(Self::get_question_list_render_item)
             .collect::<Vec<_>>();
 
-        let mut border_style = Style::default();
+        // Inactive panels recede rather than competing with the active one
+        // for attention.
+        let mut border_style = Style::default().fg(TokyoNightColors::Comment.into());
         if self.is_active() {
             border_style = border_style.fg(TokyoNightColors::Pink.into());
         }
@@ -635,7 +637,13 @@ impl Widget for QuestionListWidget {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title("Questions")
+                    .border_type(BorderType::Rounded)
+                    .title(Span::styled(
+                        " Questions ",
+                        Style::default()
+                            .fg(TokyoNightColors::Foreground.into())
+                            .add_modifier(Modifier::BOLD),
+                    ))
                     .border_style(border_style),
             )
             .highlight_style(

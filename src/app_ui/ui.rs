@@ -2,8 +2,12 @@ use std::collections::HashMap;
 
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
-    widgets::{Block, BorderType, Borders},
+    style::{Modifier, Style},
+    text::{Line, Span},
+    widgets::Paragraph,
 };
+
+use super::components::color::TokyoNightColors;
 
 use super::{
     app::App,
@@ -21,24 +25,48 @@ pub fn render(app: &mut App, f: &mut CrosstermStderr) {
     // Create two chunks with equal horizontal screen space
     let size = f.size();
 
-    let terminal_main_block = Block::default()
-        .borders(Borders::ALL)
-        .title("Leetcode TUI")
-        .title_alignment(Alignment::Center)
-        .border_type(BorderType::Rounded);
+    // A header row rather than a full frame around the whole app: an outer
+    // border costs two rows and four columns and puts a second rule beside
+    // every panel rule, which on a small terminal is real estate the question
+    // list needs more than the frame does.
+    let shell = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .split(size);
 
-    let inner_size = terminal_main_block.inner(f.size());
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                " leetcode",
+                Style::default()
+                    .fg(TokyoNightColors::Pink.into())
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " tui",
+                Style::default().fg(TokyoNightColors::Comment.into()),
+            ),
+        ]))
+        .alignment(Alignment::Left),
+        shell[0],
+    );
 
-    f.render_widget(terminal_main_block, size);
+    let inner_size = shell[1];
 
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
         .split(inner_size);
 
+    // Stats is five fixed rows, so give it exactly what it needs and let the
+    // topic list have the rest rather than splitting the column in half.
     let left_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .constraints([Constraint::Min(0), Constraint::Length(7)])
         .split(chunks[0]);
 
     let right_chunk = Layout::default()

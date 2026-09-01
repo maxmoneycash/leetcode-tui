@@ -13,6 +13,16 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Reworked the main TUI: dropped the outer frame (it cost two rows, four
+  columns and a second rule beside every panel) for a header row, flattened
+  the stats pane from five bordered gauges nested three rules deep into five
+  compact rows with inline bars, gave the topic list the slack the stats pane
+  was holding, and made panel chrome consistent (rounded borders, padded
+  titles, inactive panels recede).
+
+- Grind mode falls back to 16 colours when the terminal does not advertise
+  truecolor, instead of emitting 24-bit escapes that such a terminal drops.
+
 - Redrew the candlestick chart with a sub-cell glyph set (`┃ ╻ ╹ ╽ ╿ ╷ ╵ ─`),
   doubling effective vertical resolution; candles now widen when few, draw a
   doji for sub-cell bodies, and sit on a recessive dotted axis. Reworked the

@@ -1,9 +1,9 @@
 use super::{notification::NotifContent, *};
-use crate::app_ui::components::color::{Callout, TokyoNightColors};
+use crate::app_ui::components::color::TokyoNightColors;
 use crate::app_ui::{async_task_channel::ChannelRequestSender, helpers::question};
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, Gauge},
+    widgets::{Block, BorderType, Borders, Paragraph},
 };
 
 #[derive(Debug)]
@@ -27,10 +27,13 @@ impl Stats {
     fn create_block(title: &str) -> Block {
         Block::default()
             .borders(Borders::ALL)
-            .style(Style::default().fg(Color::Gray))
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(TokyoNightColors::Comment.into()))
             .title(Span::styled(
-                title,
-                Style::default().add_modifier(Modifier::BOLD),
+                format!(" {title} "),
+                Style::default()
+                    .fg(TokyoNightColors::Foreground.into())
+                    .add_modifier(Modifier::BOLD),
             ))
     }
 }
@@ -40,41 +43,33 @@ super::impl_common_state!(Stats);
 impl Widget for Stats {
     fn render(&mut self, rect: Rect, frame: &mut Frame<CrosstermBackend<Stderr>>) {
         let block = Self::create_block("Stats");
-        let inner_area = block.inner(rect);
+        let inner = block.inner(rect);
         frame.render_widget(block, rect);
 
-        let horizontal_partition = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(inner_area);
+        let Some(stat_state) = &self.stat_state else {
+            return;
+        };
 
-        let left_partition = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(horizontal_partition[0]);
-
-        let right_partition = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Percentage(33),
-                Constraint::Percentage(33),
-                Constraint::Percentage(33),
-            ])
-            .split(horizontal_partition[1]);
-        if let Some(stat_state) = &self.stat_state {
-            let gauges: Vec<Gauge> = stat_state.into();
-            for (part, gauge) in [
-                left_partition[0],
-                left_partition[1],
-                right_partition[0],
-                right_partition[1],
-                right_partition[2],
-            ]
-            .into_iter()
-            .zip(gauges)
-            {
-                frame.render_widget(gauge, part)
+        // One compact row per statistic. Previously each of these was its own
+        // bordered Gauge inside the Stats block inside the app frame: three
+        // nested rules deep, with the border eating most of each gauge's
+        // height. A label, a count and an inline bar say the same thing in one
+        // row and leave the numbers actually readable.
+        for (i, (label, val, total, color)) in stat_state.rows().into_iter().enumerate() {
+            let i = i as u16;
+            if i >= inner.height {
+                break;
             }
+            let row = Rect {
+                x: inner.x,
+                y: inner.y + i,
+                width: inner.width,
+                height: 1,
+            };
+            frame.render_widget(
+                Paragraph::new(stat_row(label, val, total, color, row.width)),
+                row,
+            );
         }
     }
 
@@ -111,6 +106,48 @@ impl<'a> From<question::Stats<'a>> for StatState {
     }
 }
 
+/// Build one "label  n/total  ▓▓▓░░  pct" row, degrading gracefully as the
+/// pane narrows: the bar is the first thing to give up its space.
+fn stat_row<'a>(label: &'a str, val: usize, total: usize, color: Color, width: u16) -> Line<'a> {
+    let pct = if total != 0 {
+        val as f64 / total as f64
+    } else {
+        0.0
+    };
+    let counts = format!("{val}/{total}");
+    let pct_text = format!("{:>5.1}%", pct * 100.0);
+
+    let label_w = 17usize;
+    let counts_w = 11usize;
+    let fixed = label_w + counts_w + pct_text.len() + 2;
+    let bar_w = (width as usize).saturating_sub(fixed);
+    let filled = ((bar_w as f64) * pct).round() as usize;
+
+    let mut spans = vec![
+        Span::styled(
+            format!("{label:<label_w$}"),
+            Style::default().fg(TokyoNightColors::Foreground.into()),
+        ),
+        Span::styled(
+            format!("{counts:<counts_w$}"),
+            Style::default().fg(TokyoNightColors::Comment.into()),
+        ),
+    ];
+    if bar_w > 0 {
+        spans.push(Span::styled(
+            "\u{2501}".repeat(filled),
+            Style::default().fg(color),
+        ));
+        spans.push(Span::styled(
+            "\u{2501}".repeat(bar_w.saturating_sub(filled)),
+            Style::default().fg(TokyoNightColors::Selection.into()),
+        ));
+        spans.push(Span::raw(" "));
+    }
+    spans.push(Span::styled(pct_text, Style::default().fg(color)));
+    Line::from(spans)
+}
+
 #[derive(Debug)]
 struct StatState {
     pub accepted: usize,
@@ -125,67 +162,39 @@ struct StatState {
 }
 
 impl StatState {
-    fn get_gauge(title: &str, val: usize, total: usize, style: Style) -> Gauge {
-        let block_title = format!("{}: {}/{}", title, val, total);
-        let percentage = if total != 0 {
-            (val as f32 / total as f32) * 100_f32
-        } else {
-            0 as f32
-        };
-        // let style: Style = style.into();
-        let label = Span::styled(
-            format!("{:.2}%", percentage),
-            style
-                .add_modifier(Modifier::ITALIC | Modifier::BOLD)
-                .bg(TokyoNightColors::Selection.into()),
-        );
-
-        Gauge::default()
-            .block(Block::default().title(block_title).borders(Borders::ALL))
-            .gauge_style(style)
-            .percent(percentage as u16)
-            .label(label)
-    }
-}
-
-impl<'a> From<&StatState> for Vec<Gauge<'a>> {
-    fn from(value: &StatState) -> Self {
-        [
+    /// The five figures the pane shows, in display order.
+    fn rows(&self) -> Vec<(&'static str, usize, usize, Color)> {
+        vec![
             (
-                "Total Accepted",
-                value.accepted,
-                value.total,
+                "Total accepted",
+                self.accepted,
+                self.total,
                 TokyoNightColors::Purple.into(),
             ),
             (
-                "Total Attempted",
-                value.total - value.not_attempted,
-                value.total,
+                "Total attempted",
+                self.total.saturating_sub(self.not_attempted),
+                self.total,
                 TokyoNightColors::Purple.into(),
             ),
             (
-                "Easy Accepted",
-                value.easy_accepted,
-                value.easy,
-                Callout::Success.into(),
+                "Easy",
+                self.easy_accepted,
+                self.easy,
+                TokyoNightColors::Green.into(),
             ),
             (
-                "Medium Accepted",
-                value.medium_accepted,
-                value.medium,
-                Callout::Warning.into(),
+                "Medium",
+                self.medium_accepted,
+                self.medium,
+                TokyoNightColors::Yellow.into(),
             ),
             (
-                "Hard Accepted",
-                value.hard_accepted,
-                value.hard,
-                Callout::Error.into(),
+                "Hard",
+                self.hard_accepted,
+                self.hard,
+                TokyoNightColors::Red.into(),
             ),
         ]
-        .into_iter()
-        .map(|(title, val, total, color_combo)| {
-            StatState::get_gauge(title, val, total, color_combo)
-        })
-        .collect()
     }
 }

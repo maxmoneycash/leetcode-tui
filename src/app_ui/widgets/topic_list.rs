@@ -13,7 +13,7 @@ use crate::{
 use crossterm::event::KeyEvent;
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, List, ListItem},
+    widgets::{Block, BorderType, Borders, List, ListItem},
 };
 
 use super::{
@@ -89,7 +89,9 @@ impl Widget for TopicTagListWidget {
             .map(Self::get_item)
             .collect::<Vec<_>>();
 
-        let mut border_style = Style::default();
+        // Inactive panels recede rather than competing with the active one
+        // for attention.
+        let mut border_style = Style::default().fg(TokyoNightColors::Comment.into());
 
         if self.is_active() {
             border_style = border_style.fg(TokyoNightColors::Pink.into());
@@ -100,7 +102,13 @@ impl Widget for TopicTagListWidget {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title("Topics")
+                    .border_type(BorderType::Rounded)
+                    .title(Span::styled(
+                        " Topics ",
+                        Style::default()
+                            .fg(TokyoNightColors::Foreground.into())
+                            .add_modifier(Modifier::BOLD),
+                    ))
                     .border_style(border_style),
             )
             .highlight_style(
