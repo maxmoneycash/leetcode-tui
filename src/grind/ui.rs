@@ -10,16 +10,9 @@ use ratatui::prelude::*;
 use ratatui::widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph};
 
 use super::app::{GrindApp, Screen};
-use super::chart::{CandleChart, BEAR, BULL};
+use super::chart::CandleChart;
 use super::problems::{Difficulty, PROBLEMS};
-
-/// Untyped code: present but recessive.
-const INK_PENDING: Color = Color::Rgb(88, 94, 107);
-/// Already typed correctly.
-const INK_DONE: Color = Color::Rgb(222, 227, 236);
-/// Labels and chrome.
-const INK_MUTED: Color = Color::Rgb(120, 126, 138);
-const AMBER: Color = Color::Rgb(226, 170, 62);
+use super::theme::theme;
 
 pub fn render(app: &mut GrindApp, f: &mut Frame<'_, impl Backend>) {
     let size = f.size();
@@ -31,9 +24,9 @@ pub fn render(app: &mut GrindApp, f: &mut Frame<'_, impl Backend>) {
 
 fn difficulty_color(d: Difficulty) -> Color {
     match d {
-        Difficulty::Easy => BULL,
-        Difficulty::Medium => AMBER,
-        Difficulty::Hard => BEAR,
+        Difficulty::Easy => theme().bull,
+        Difficulty::Medium => theme().amber,
+        Difficulty::Hard => theme().bear,
     }
 }
 
@@ -42,11 +35,13 @@ fn key_hints(pairs: &[(&str, &str)]) -> Line<'static> {
     for (key, label) in pairs {
         spans.push(Span::styled(
             key.to_string(),
-            Style::default().fg(INK_DONE).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme().ink)
+                .add_modifier(Modifier::BOLD),
         ));
         spans.push(Span::styled(
             format!(" {}   ", label),
-            Style::default().fg(INK_MUTED),
+            Style::default().fg(theme().muted),
         ));
     }
     Line::from(spans)
@@ -65,11 +60,13 @@ fn render_select(app: &mut GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect
     let title = Paragraph::new(vec![
         Line::from(Span::styled(
             "  GRIND",
-            Style::default().fg(BULL).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme().bull)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             "  type the solution — your wpm is the ticker",
-            Style::default().fg(INK_MUTED),
+            Style::default().fg(theme().muted),
         )),
     ]);
     f.render_widget(title, chunks[0]);
@@ -79,18 +76,18 @@ fn render_select(app: &mut GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect
         .map(|p| {
             ListItem::new(Line::from(vec![
                 Span::styled("● ", Style::default().fg(difficulty_color(p.difficulty))),
-                Span::styled(format!("{:<46}", p.title), Style::default().fg(INK_DONE)),
+                Span::styled(format!("{:<46}", p.title), Style::default().fg(theme().ink)),
                 Span::styled(
                     format!("{:<8}", p.difficulty.as_str().to_lowercase()),
                     Style::default().fg(difficulty_color(p.difficulty)),
                 ),
-                Span::styled(p.language, Style::default().fg(INK_MUTED)),
+                Span::styled(p.language, Style::default().fg(theme().muted)),
             ]))
         })
         .collect();
 
     let list = List::new(items)
-        .highlight_style(Style::default().bg(Color::Rgb(30, 38, 48)))
+        .highlight_style(Style::default().bg(theme().rule))
         .highlight_symbol("▌");
     let mut state = ListState::default();
     state.select(Some(app.selected));
@@ -157,9 +154,11 @@ fn render_title(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect) {
             Span::raw("  "),
             Span::styled(
                 p.title.to_uppercase(),
-                Style::default().fg(INK_DONE).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(theme().ink)
+                    .add_modifier(Modifier::BOLD),
             ),
-            Span::styled("  ·  ", Style::default().fg(INK_MUTED)),
+            Span::styled("  ·  ", Style::default().fg(theme().muted)),
             Span::styled(
                 p.difficulty.as_str().to_lowercase(),
                 Style::default().fg(difficulty_color(p.difficulty)),
@@ -176,7 +175,11 @@ fn render_stats(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect, now
     let live = e.rolling_wpm(now);
     let avg = e.average_wpm(now);
     let up = live >= avg;
-    let (arrow, color) = if up { ("▲", BULL) } else { ("▼", BEAR) };
+    let (arrow, color) = if up {
+        ("▲", theme().bull)
+    } else {
+        ("▼", theme().bear)
+    };
 
     let mut spans = vec![
         Span::raw("  "),
@@ -185,7 +188,7 @@ fn render_stats(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect, now
             Style::default().fg(color).add_modifier(Modifier::BOLD),
         ),
         Span::styled(format!(" {} ", arrow), Style::default().fg(color)),
-        Span::styled("WPM", Style::default().fg(INK_MUTED)),
+        Span::styled("WPM", Style::default().fg(theme().muted)),
         Span::raw("    "),
     ];
     for (label, value) in [
@@ -195,9 +198,9 @@ fn render_stats(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect, now
     ] {
         spans.push(Span::styled(
             format!("{} ", label),
-            Style::default().fg(INK_MUTED),
+            Style::default().fg(theme().muted),
         ));
-        spans.push(Span::styled(value, Style::default().fg(INK_DONE)));
+        spans.push(Span::styled(value, Style::default().fg(theme().ink)));
         spans.push(Span::raw("   "));
     }
     f.render_widget(Paragraph::new(Line::from(spans)), area);
@@ -212,10 +215,10 @@ fn render_progress(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect) 
     let filled = ((bar_w as f64) * pct).round() as usize;
     let line = Line::from(vec![
         Span::raw("  "),
-        Span::styled("━".repeat(filled), Style::default().fg(BULL)),
+        Span::styled("━".repeat(filled), Style::default().fg(theme().bull)),
         Span::styled(
             "━".repeat(bar_w.saturating_sub(filled)),
-            Style::default().fg(Color::Rgb(45, 50, 60)),
+            Style::default().fg(theme().rule),
         ),
     ]);
     f.render_widget(Paragraph::new(line), area);
@@ -231,18 +234,18 @@ fn render_code(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect) {
         let at_cursor = i == e.cursor && !e.is_finished();
         let style = if at_cursor {
             if app.flash_error {
-                Style::default().bg(BEAR).fg(Color::Black)
+                Style::default().bg(theme().bear).fg(Color::Black)
             } else {
-                Style::default().bg(INK_DONE).fg(Color::Black)
+                Style::default().bg(theme().ink).fg(Color::Black)
             }
         } else if i < e.cursor {
             if tc.had_error {
-                Style::default().fg(BEAR)
+                Style::default().fg(theme().bear)
             } else {
-                Style::default().fg(INK_DONE)
+                Style::default().fg(theme().ink)
             }
         } else {
-            Style::default().fg(INK_PENDING)
+            Style::default().fg(theme().pending)
         };
         if at_cursor {
             cursor_row = lines.len() as u16;
@@ -260,7 +263,7 @@ fn render_code(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect) {
 
     let block = Block::default()
         .borders(Borders::LEFT)
-        .border_style(Style::default().fg(Color::Rgb(45, 50, 60)))
+        .border_style(Style::default().fg(theme().rule))
         .padding(ratatui::widgets::Padding::new(1, 0, 0, 0));
     let text_h = block.inner(area).height;
     let scroll = cursor_row.saturating_sub(text_h.saturating_sub(2));
@@ -273,23 +276,23 @@ fn render_chart(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect, now
     let up = last.map(|c| c.is_bullish()).unwrap_or(true);
 
     let title = Line::from(vec![
-        Span::styled(" $WPM ", Style::default().fg(INK_DONE)),
+        Span::styled(" $WPM ", Style::default().fg(theme().ink)),
         Span::styled(
             format!("{:.0} ", app.engine.rolling_wpm(now)),
             Style::default()
-                .fg(if up { BULL } else { BEAR })
+                .fg(if up { theme().bull } else { theme().bear })
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             format!("· high {:.0} · 2s ", app.series.session_high()),
-            Style::default().fg(INK_MUTED),
+            Style::default().fg(theme().muted),
         ),
     ]);
 
     let chart = CandleChart::new(&candles).block(
         Block::default()
             .borders(Borders::TOP)
-            .border_style(Style::default().fg(Color::Rgb(45, 50, 60)))
+            .border_style(Style::default().fg(theme().rule))
             .title(title),
     );
     f.render_widget(chart, area);
@@ -302,9 +305,9 @@ fn render_results(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect, n
     let bears = candles.len().saturating_sub(bulls);
     let up = bulls >= bears;
     let (verdict, color) = if up {
-        ("BULLISH", BULL)
+        ("theme().bullISH", theme().bull)
     } else {
-        ("BEARISH", BEAR)
+        ("theme().bearISH", theme().bear)
     };
 
     let w = 46.min(area.width);
@@ -318,36 +321,39 @@ fn render_results(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect, n
     f.render_widget(Clear, popup);
 
     let lines = vec![
-        Line::from(Span::styled("run complete", Style::default().fg(INK_MUTED))),
+        Line::from(Span::styled(
+            "run complete",
+            Style::default().fg(theme().muted),
+        )),
         Line::from(""),
         Line::from(vec![
             Span::styled(
                 format!("{:.0}", e.average_wpm(now)),
                 Style::default().fg(color).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" wpm     ", Style::default().fg(INK_MUTED)),
+            Span::styled(" wpm     ", Style::default().fg(theme().muted)),
             Span::styled(
                 format!("{:.1}%", e.accuracy()),
-                Style::default().fg(INK_DONE),
+                Style::default().fg(theme().ink),
             ),
-            Span::styled(" acc", Style::default().fg(INK_MUTED)),
+            Span::styled(" acc", Style::default().fg(theme().muted)),
         ]),
         Line::from(vec![
             Span::styled(
                 format!("{:.1}s", e.elapsed_secs(now)),
-                Style::default().fg(INK_DONE),
+                Style::default().fg(theme().ink),
             ),
-            Span::styled("       high ", Style::default().fg(INK_MUTED)),
+            Span::styled("       high ", Style::default().fg(theme().muted)),
             Span::styled(
                 format!("{:.0}", app.series.session_high()),
-                Style::default().fg(INK_DONE),
+                Style::default().fg(theme().ink),
             ),
         ]),
         Line::from(""),
         Line::from(vec![
             Span::styled(
                 format!("{} green / {} red  ", bulls, bears),
-                Style::default().fg(INK_MUTED),
+                Style::default().fg(theme().muted),
             ),
             Span::styled(
                 verdict,

@@ -15,6 +15,7 @@ use ratatui::prelude::*;
 use ratatui::widgets::{Block, Widget};
 
 use super::candles::Candle;
+use super::theme::theme;
 
 /// Full-height body.
 const BODY: &str = "┃";
@@ -46,13 +47,6 @@ fn is_body(g: &str) -> bool {
         BODY | HALF_BODY_BOTTOM | HALF_BODY_TOP | WICK_OVER_BODY | BODY_OVER_WICK | DOJI
     )
 }
-
-/// Green and red leaning slightly cyan/pink respectively, which separates
-/// them better than pure red/green for the most common colour-vision
-/// deficiencies. Direction is also stated as text in the header, so the
-/// chart never depends on colour alone.
-pub const BULL: Color = Color::Rgb(52, 208, 88);
-pub const BEAR: Color = Color::Rgb(234, 74, 90);
 
 /// Columns reserved for price labels, e.g. "123.4".
 const Y_LABEL_WIDTH: u16 = 5;
@@ -180,7 +174,8 @@ impl Widget for CandleChart<'_> {
 
         // Recessive axis: dim labels, dotted gridline. The data is the only
         // thing that should carry weight.
-        let axis_style = Style::default().fg(Color::DarkGray);
+        let th = theme();
+        let axis_style = Style::default().fg(th.rule);
         for r in 0..h {
             let y = inner.y + r;
             if r % TICK_EVERY == 0 {
@@ -219,7 +214,7 @@ impl Widget for CandleChart<'_> {
                 break;
             }
             let wick_x = x0 + (body_w - 1) / 2;
-            let style = Style::default().fg(if c.is_bullish() { BULL } else { BEAR });
+            let style = Style::default().fg(if c.is_bullish() { th.bull } else { th.bear });
             let high = to_unit(c.high);
             let low = to_unit(c.low);
             let body_top = to_unit(c.open.max(c.close));
