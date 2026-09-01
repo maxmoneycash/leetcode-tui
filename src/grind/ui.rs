@@ -1,172 +1,253 @@
 //! Rendering for grind mode: problem picker, typing surface, live wpm
-//! candlestick chart, and the results view.
+//! candlestick chart, and the results card.
+//!
+//! Layout note: there is deliberately no outer border. Nesting bordered
+//! panels inside an outer frame costs two rows and four columns and adds a
+//! second rule beside every inner rule, which on an 80x24 terminal is a real
+//! amount of the code pane. A plain title row does the same job.
 
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph};
 
 use super::app::{GrindApp, Screen};
-use super::chart::CandleChart;
+use super::chart::{CandleChart, BEAR, BULL};
 use super::problems::{Difficulty, PROBLEMS};
+
+/// Untyped code: present but recessive.
+const INK_PENDING: Color = Color::Rgb(88, 94, 107);
+/// Already typed correctly.
+const INK_DONE: Color = Color::Rgb(222, 227, 236);
+/// Labels and chrome.
+const INK_MUTED: Color = Color::Rgb(120, 126, 138);
+const AMBER: Color = Color::Rgb(226, 170, 62);
 
 pub fn render(app: &mut GrindApp, f: &mut Frame<'_, impl Backend>) {
     let size = f.size();
-    let outer = Block::default()
-        .borders(Borders::ALL)
-        .title(" Leetcode TUI — Grind Mode ")
-        .title_alignment(Alignment::Center)
-        .border_type(BorderType::Rounded);
-    let inner = outer.inner(size);
-    f.render_widget(outer, size);
-
     match app.screen {
-        Screen::Select => render_select(app, f, inner),
-        Screen::Typing | Screen::Results => render_run(app, f, inner),
+        Screen::Select => render_select(app, f, size),
+        Screen::Typing | Screen::Results => render_run(app, f, size),
     }
 }
 
 fn difficulty_color(d: Difficulty) -> Color {
     match d {
-        Difficulty::Easy => Color::Green,
-        Difficulty::Medium => Color::Yellow,
-        Difficulty::Hard => Color::Red,
+        Difficulty::Easy => BULL,
+        Difficulty::Medium => AMBER,
+        Difficulty::Hard => BEAR,
     }
+}
+
+fn key_hints(pairs: &[(&str, &str)]) -> Line<'static> {
+    let mut spans = vec![Span::raw("  ")];
+    for (key, label) in pairs {
+        spans.push(Span::styled(
+            key.to_string(),
+            Style::default().fg(INK_DONE).add_modifier(Modifier::BOLD),
+        ));
+        spans.push(Span::styled(
+            format!(" {}   ", label),
+            Style::default().fg(INK_MUTED),
+        ));
+    }
+    Line::from(spans)
 }
 
 fn render_select(app: &mut GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(3), Constraint::Length(1)])
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Min(3),
+            Constraint::Length(1),
+        ])
         .split(area);
+
+    let title = Paragraph::new(vec![
+        Line::from(Span::styled(
+            "  GRIND",
+            Style::default().fg(BULL).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(Span::styled(
+            "  type the solution — your wpm is the ticker",
+            Style::default().fg(INK_MUTED),
+        )),
+    ]);
+    f.render_widget(title, chunks[0]);
 
     let items: Vec<ListItem> = PROBLEMS
         .iter()
         .map(|p| {
             ListItem::new(Line::from(vec![
+                Span::styled("● ", Style::default().fg(difficulty_color(p.difficulty))),
+                Span::styled(format!("{:<46}", p.title), Style::default().fg(INK_DONE)),
                 Span::styled(
-                    format!("{:<8}", p.difficulty.as_str()),
+                    format!("{:<8}", p.difficulty.as_str().to_lowercase()),
                     Style::default().fg(difficulty_color(p.difficulty)),
                 ),
-                Span::raw(p.title),
-                Span::styled(
-                    format!("  [{}]", p.language),
-                    Style::default().fg(Color::DarkGray),
-                ),
+                Span::styled(p.language, Style::default().fg(INK_MUTED)),
             ]))
         })
         .collect();
 
     let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .title(" Pick a problem to type "),
-        )
-        .highlight_style(
-            Style::default()
-                .bg(Color::Green)
-                .fg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol(" > ");
-
+        .highlight_style(Style::default().bg(Color::Rgb(30, 38, 48)))
+        .highlight_symbol("▌");
     let mut state = ListState::default();
     state.select(Some(app.selected));
-    f.render_stateful_widget(list, chunks[0], &mut state);
+    f.render_stateful_widget(list, chunks[1], &mut state);
 
-    let help = Paragraph::new(Line::from(vec![
-        Span::styled("↑/↓ or j/k", Style::default().fg(Color::Green)),
-        Span::raw(" select   "),
-        Span::styled("Enter", Style::default().fg(Color::Green)),
-        Span::raw(" start   "),
-        Span::styled("q/Esc", Style::default().fg(Color::Green)),
-        Span::raw(" quit"),
-    ]))
-    .alignment(Alignment::Center);
-    f.render_widget(help, chunks[1]);
+    f.render_widget(
+        Paragraph::new(key_hints(&[
+            ("↑↓/jk", "select"),
+            ("enter", "start"),
+            ("q", "quit"),
+        ])),
+        chunks[2],
+    );
 }
 
 fn render_run(app: &mut GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect) {
     let now = app.now_secs();
-    let chart_height = (area.height / 3).clamp(6, 12);
+    // Size the code pane to the snippet rather than letting it absorb all the
+    // slack: a 5-line solution does not need 19 rows, and every row it does
+    // not need is a row the chart can use.
+    let code_lines = app.engine.target.iter().filter(|t| t.ch == '\n').count() as u16 + 1;
+    let max_code_h = area.height.saturating_sub(12).max(4);
+    let mut code_h = (code_lines + 1).clamp(4, max_code_h);
+    if app.screen == Screen::Results {
+        // The results card takes over the code pane rather than floating over
+        // the chart: once the run is done the code has served its purpose, and
+        // covering the candles hides the thing the run just produced.
+        code_h = code_h.max(9).min(area.height.saturating_sub(6).max(4));
+    }
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2),
-            Constraint::Min(4),
-            Constraint::Length(chart_height),
-            Constraint::Length(1),
+            Constraint::Length(1), // title
+            Constraint::Length(1), // stat strip
+            Constraint::Length(1), // progress
+            Constraint::Length(code_h),
+            Constraint::Min(6),    // chart takes the rest
+            Constraint::Length(1), // hints
         ])
         .split(area);
 
-    render_status_bar(app, f, chunks[0], now);
-    render_code(app, f, chunks[1]);
-    render_chart(app, f, chunks[2]);
-    render_run_help(app, f, chunks[3]);
-
+    render_title(app, f, chunks[0]);
+    render_stats(app, f, chunks[1], now);
+    render_progress(app, f, chunks[2]);
     if app.screen == Screen::Results {
-        render_results_popup(app, f, area, now);
+        render_results(app, f, chunks[3], now);
+    } else {
+        render_code(app, f, chunks[3]);
     }
+    render_chart(app, f, chunks[4], now);
+
+    let hints = if app.screen == Screen::Results {
+        key_hints(&[("enter", "next"), ("^r", "retry"), ("esc", "menu")])
+    } else {
+        key_hints(&[("esc", "menu"), ("^r", "restart"), ("^c", "quit")])
+    };
+    f.render_widget(Paragraph::new(hints), chunks[5]);
 }
 
-fn render_status_bar(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect, now: f64) {
-    let engine = &app.engine;
+fn render_title(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect) {
     let p = app.problem();
-    let wpm_now = engine.rolling_wpm(now);
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::raw("  "),
+            Span::styled(
+                p.title.to_uppercase(),
+                Style::default().fg(INK_DONE).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("  ·  ", Style::default().fg(INK_MUTED)),
+            Span::styled(
+                p.difficulty.as_str().to_lowercase(),
+                Style::default().fg(difficulty_color(p.difficulty)),
+            ),
+        ])),
+        area,
+    );
+}
+
+/// The ticker line. Direction is shown with an arrow as well as colour, so
+/// it still reads without colour vision.
+fn render_stats(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect, now: f64) {
+    let e = &app.engine;
+    let live = e.rolling_wpm(now);
+    let avg = e.average_wpm(now);
+    let up = live >= avg;
+    let (arrow, color) = if up { ("▲", BULL) } else { ("▼", BEAR) };
+
+    let mut spans = vec![
+        Span::raw("  "),
+        Span::styled(
+            format!("{:.0}", live),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(format!(" {} ", arrow), Style::default().fg(color)),
+        Span::styled("WPM", Style::default().fg(INK_MUTED)),
+        Span::raw("    "),
+    ];
+    for (label, value) in [
+        ("avg", format!("{:.0}", avg)),
+        ("acc", format!("{:.1}%", e.accuracy())),
+        ("time", format!("{:.0}s", e.elapsed_secs(now))),
+    ] {
+        spans.push(Span::styled(
+            format!("{} ", label),
+            Style::default().fg(INK_MUTED),
+        ));
+        spans.push(Span::styled(value, Style::default().fg(INK_DONE)));
+        spans.push(Span::raw("   "));
+    }
+    f.render_widget(Paragraph::new(Line::from(spans)), area);
+}
+
+fn render_progress(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect) {
+    if area.width < 8 {
+        return;
+    }
+    let pct = app.engine.progress_percent() / 100.0;
+    let bar_w = area.width.saturating_sub(4) as usize;
+    let filled = ((bar_w as f64) * pct).round() as usize;
     let line = Line::from(vec![
+        Span::raw("  "),
+        Span::styled("━".repeat(filled), Style::default().fg(BULL)),
         Span::styled(
-            format!(" {} ", p.title),
-            Style::default()
-                .fg(difficulty_color(p.difficulty))
-                .add_modifier(Modifier::BOLD),
+            "━".repeat(bar_w.saturating_sub(filled)),
+            Style::default().fg(Color::Rgb(45, 50, 60)),
         ),
-        Span::styled(
-            format!("  $WPM {:>5.1} ", wpm_now),
-            Style::default().fg(if wpm_now >= engine.average_wpm(now) {
-                Color::Green
-            } else {
-                Color::Red
-            }),
-        ),
-        Span::raw(format!(
-            "  avg {:>5.1}   acc {:>5.1}%   {:>4.0}s   {:>3.0}%",
-            engine.average_wpm(now),
-            engine.accuracy(),
-            engine.elapsed_secs(now),
-            engine.progress_percent(),
-        )),
     ]);
     f.render_widget(Paragraph::new(line), area);
 }
 
 fn render_code(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect) {
-    let engine = &app.engine;
+    let e = &app.engine;
     let mut lines: Vec<Line> = vec![];
     let mut current: Vec<Span> = vec![];
     let mut cursor_row: u16 = 0;
 
-    for (i, tc) in engine.target.iter().enumerate() {
-        let at_cursor = i == engine.cursor && !engine.is_finished();
+    for (i, tc) in e.target.iter().enumerate() {
+        let at_cursor = i == e.cursor && !e.is_finished();
         let style = if at_cursor {
             if app.flash_error {
-                Style::default().bg(Color::Red).fg(Color::White)
+                Style::default().bg(BEAR).fg(Color::Black)
             } else {
-                Style::default().bg(Color::Green).fg(Color::Black)
+                Style::default().bg(INK_DONE).fg(Color::Black)
             }
-        } else if i < engine.cursor {
+        } else if i < e.cursor {
             if tc.had_error {
-                Style::default().fg(Color::Yellow)
+                Style::default().fg(BEAR)
             } else {
-                Style::default().fg(Color::Green)
+                Style::default().fg(INK_DONE)
             }
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(INK_PENDING)
         };
         if at_cursor {
             cursor_row = lines.len() as u16;
         }
         if tc.ch == '\n' {
-            // make the newline visible when it's the char to type
             if at_cursor {
                 current.push(Span::styled("⏎", style));
             }
@@ -178,110 +259,110 @@ fn render_code(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect) {
     lines.push(Line::from(current));
 
     let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" type the solution ");
-    let text_height = block.inner(area).height;
-    // keep the cursor line in view
-    let scroll = cursor_row.saturating_sub(text_height.saturating_sub(2));
-    let para = Paragraph::new(lines).block(block).scroll((scroll, 0));
-    f.render_widget(para, area);
+        .borders(Borders::LEFT)
+        .border_style(Style::default().fg(Color::Rgb(45, 50, 60)))
+        .padding(ratatui::widgets::Padding::new(1, 0, 0, 0));
+    let text_h = block.inner(area).height;
+    let scroll = cursor_row.saturating_sub(text_h.saturating_sub(2));
+    f.render_widget(Paragraph::new(lines).block(block).scroll((scroll, 0)), area);
 }
 
-fn render_chart(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect) {
+fn render_chart(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect, now: f64) {
     let candles = app.series.all();
-    let title = format!(
-        " $WPM · session high {:.0} · {}s candles ",
-        app.series.session_high(),
-        super::app::CANDLE_PERIOD_SECS
-    );
+    let last = candles.last();
+    let up = last.map(|c| c.is_bullish()).unwrap_or(true);
+
+    let title = Line::from(vec![
+        Span::styled(" $WPM ", Style::default().fg(INK_DONE)),
+        Span::styled(
+            format!("{:.0} ", app.engine.rolling_wpm(now)),
+            Style::default()
+                .fg(if up { BULL } else { BEAR })
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("· high {:.0} · 2s ", app.series.session_high()),
+            Style::default().fg(INK_MUTED),
+        ),
+    ]);
+
     let chart = CandleChart::new(&candles).block(
         Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
+            .borders(Borders::TOP)
+            .border_style(Style::default().fg(Color::Rgb(45, 50, 60)))
             .title(title),
     );
     f.render_widget(chart, area);
 }
 
-fn render_run_help(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect) {
-    let mut spans = vec![
-        Span::styled("Esc", Style::default().fg(Color::Green)),
-        Span::raw(" menu   "),
-        Span::styled("Ctrl+r", Style::default().fg(Color::Green)),
-        Span::raw(" restart   "),
-        Span::styled("Ctrl+c", Style::default().fg(Color::Green)),
-        Span::raw(" quit"),
-    ];
-    if app.screen == Screen::Results {
-        spans = vec![
-            Span::styled("Enter", Style::default().fg(Color::Green)),
-            Span::raw(" next problem   "),
-            Span::styled("Ctrl+r", Style::default().fg(Color::Green)),
-            Span::raw(" retry   "),
-            Span::styled("Esc", Style::default().fg(Color::Green)),
-            Span::raw(" menu"),
-        ];
-    }
-    f.render_widget(
-        Paragraph::new(Line::from(spans)).alignment(Alignment::Center),
-        area,
-    );
-}
+fn render_results(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect, now: f64) {
+    let e = &app.engine;
+    let candles = app.series.all();
+    let bulls = candles.iter().filter(|c| c.is_bullish()).count();
+    let bears = candles.len().saturating_sub(bulls);
+    let up = bulls >= bears;
+    let (verdict, color) = if up {
+        ("BULLISH", BULL)
+    } else {
+        ("BEARISH", BEAR)
+    };
 
-fn render_results_popup(app: &GrindApp, f: &mut Frame<'_, impl Backend>, area: Rect, now: f64) {
-    let engine = &app.engine;
-    let width = 44.min(area.width);
-    let height = 8.min(area.height);
+    let w = 46.min(area.width);
+    let h = 9.min(area.height);
     let popup = Rect {
-        x: area.x + (area.width.saturating_sub(width)) / 2,
-        y: area.y + (area.height.saturating_sub(height)) / 2,
-        width,
-        height,
+        x: area.x + (area.width.saturating_sub(w)) / 2,
+        y: area.y + (area.height.saturating_sub(h)) / 3,
+        width: w,
+        height: h,
     };
     f.render_widget(Clear, popup);
 
-    let candles = app.series.all();
-    let bulls = candles.iter().filter(|c| c.is_bullish()).count();
-    let bears = candles.len() - bulls;
-    let verdict = if bulls >= bears { "BULLISH" } else { "BEARISH" };
-    let verdict_color = if bulls >= bears {
-        Color::Green
-    } else {
-        Color::Red
-    };
-
     let lines = vec![
-        Line::from(Span::styled(
-            "run complete",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
+        Line::from(Span::styled("run complete", Style::default().fg(INK_MUTED))),
         Line::from(""),
-        Line::from(format!(
-            "wpm {:>6.1}    acc {:>5.1}%",
-            engine.average_wpm(now),
-            engine.accuracy()
-        )),
-        Line::from(format!(
-            "time {:>5.1}s   high {:>5.0} wpm",
-            engine.elapsed_secs(now),
-            app.series.session_high()
-        )),
         Line::from(vec![
-            Span::raw(format!("{} green / {} red — session ", bulls, bears)),
+            Span::styled(
+                format!("{:.0}", e.average_wpm(now)),
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" wpm     ", Style::default().fg(INK_MUTED)),
+            Span::styled(
+                format!("{:.1}%", e.accuracy()),
+                Style::default().fg(INK_DONE),
+            ),
+            Span::styled(" acc", Style::default().fg(INK_MUTED)),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                format!("{:.1}s", e.elapsed_secs(now)),
+                Style::default().fg(INK_DONE),
+            ),
+            Span::styled("       high ", Style::default().fg(INK_MUTED)),
+            Span::styled(
+                format!("{:.0}", app.series.session_high()),
+                Style::default().fg(INK_DONE),
+            ),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(
+                format!("{} green / {} red  ", bulls, bears),
+                Style::default().fg(INK_MUTED),
+            ),
             Span::styled(
                 verdict,
-                Style::default()
-                    .fg(verdict_color)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
             ),
         ]),
     ];
-    let para = Paragraph::new(lines).alignment(Alignment::Center).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(verdict_color)),
+
+    f.render_widget(
+        Paragraph::new(lines).alignment(Alignment::Center).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(color)),
+        ),
+        popup,
     );
-    f.render_widget(para, popup);
 }

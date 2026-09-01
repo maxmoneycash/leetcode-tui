@@ -94,8 +94,13 @@ impl GrindApp {
         if self.screen == Screen::Typing && self.engine.started_at.is_some() {
             let now = self.now_secs();
             let started = self.engine.started_at.unwrap_or(now);
-            self.series
-                .push_sample(now - started, self.engine.rolling_wpm(now));
+            let wpm = self.engine.rolling_wpm(now);
+            // Don't open the series on a zero reading: the first candle would
+            // span 0..first-real-wpm and squash every later candle against the
+            // top of the chart. A ticker starts at its first real price.
+            if wpm > 0.0 || !self.series.is_empty() {
+                self.series.push_sample(now - started, wpm);
+            }
         }
     }
 

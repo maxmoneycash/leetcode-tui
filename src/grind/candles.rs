@@ -70,6 +70,11 @@ impl CandleSeries {
         }
     }
 
+    /// True until the first sample lands.
+    pub fn is_empty(&self) -> bool {
+        self.candles.is_empty() && self.current.is_none()
+    }
+
     /// Completed candles plus the one still forming.
     pub fn all(&self) -> Vec<Candle> {
         let mut out = self.candles.clone();

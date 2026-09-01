@@ -13,6 +13,13 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Redrew the candlestick chart with a sub-cell glyph set (`┃ ╻ ╹ ╽ ╿ ╷ ╵ ─`),
+  doubling effective vertical resolution; candles now widen when few, draw a
+  doji for sub-cell bodies, and sit on a recessive dotted axis. Reworked the
+  grind layout: no nested outer border, a ticker-style stat line with an
+  explicit ▲/▼, a progress bar, a content-sized code pane, and a results card
+  that replaces the code rather than covering the chart.
+
 - Declared `rust-version = "1.70"`, matching the toolchain CI already builds
   against, and added contributor docs (`CONTRIBUTING.md`,
   `CODE_OF_CONDUCT.md`, issue and pull request templates).
